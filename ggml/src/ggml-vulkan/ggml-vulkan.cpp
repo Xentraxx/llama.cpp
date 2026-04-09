@@ -13399,6 +13399,11 @@ static void ggml_vk_graph_cleanup(ggml_backend_vk_context * ctx) {
         ggml_vk_command_pool_cleanup(ctx->device, ctx->transfer_cmd_pool);
     }
 
+    // Also reset device-level command pools used by cross-device hop1 temporary contexts
+    if (!ctx->device->peer_staging.empty()) {
+        ggml_vk_queue_command_pools_cleanup(ctx->device);
+    }
+
     GGML_LOG_DEBUG("ggml_vulkan: graph_cleanup(%s) binary_semaphore_idx=%zu\n",
                    ctx->name.c_str(), ctx->binary_semaphore_idx);
     ctx->binary_semaphore_idx = 0;
