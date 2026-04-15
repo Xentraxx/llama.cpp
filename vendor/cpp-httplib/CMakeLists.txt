@@ -14,6 +14,10 @@ else()
     target_compile_options(${TARGET} PRIVATE -w)
 endif()
 
+if (BUILD_SHARED_LIBS)
+    set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
 target_link_libraries(${TARGET} PRIVATE Threads::Threads)
 
 if (WIN32 AND NOT MSVC)
