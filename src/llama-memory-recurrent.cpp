@@ -22,6 +22,7 @@ llama_memory_recurrent::llama_memory_recurrent(
                 ggml_type   type_r,
                 ggml_type   type_s,
                      bool   offload,
+                     bool   use_pinned,
                  uint32_t   mem_size,
                  uint32_t   n_seq_max,
     const layer_filter_cb & filter) : hparams(model.hparams), n_seq_max(n_seq_max) {
@@ -83,6 +84,17 @@ llama_memory_recurrent::llama_memory_recurrent(
             buft = ggml_backend_dev_buffer_type(dev);
 
             dev_name = ggml_backend_dev_name(dev);
+        } else if (use_pinned) {
+            // when state is on host with --kv-cache-host, try to use pinned host memory
+            // pinned memory enables faster DMA transfers when the compute graph runs on GPU
+            auto * dev = model.dev_layer(i);
+            if (dev) {
+                auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+                if (host_buft) {
+                    buft = host_buft;
+                    dev_name = "CPU (pinned)";
+                }
+            }
         }
 
         LLAMA_LOG_DEBUG("%s, layer %3d: dev = %s\n", __func__, i, dev_name);

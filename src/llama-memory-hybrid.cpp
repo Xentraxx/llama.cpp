@@ -25,6 +25,7 @@ llama_memory_hybrid::llama_memory_hybrid(
                             /* common */
                  uint32_t   n_seq_max,
                      bool   offload,
+                     bool   use_pinned,
                      bool   unified,
                             /* layer filters */
     const layer_filter_cb & filter_attn,
@@ -36,6 +37,7 @@ llama_memory_hybrid::llama_memory_hybrid(
         type_v,
         v_trans,
         offload,
+        use_pinned,
         unified,
         kv_size,
         n_seq_max,
@@ -52,6 +54,7 @@ llama_memory_hybrid::llama_memory_hybrid(
         type_r,
         type_s,
         offload,
+        use_pinned,
         rs_size,
         n_seq_max,
         filter_recr == nullptr ?

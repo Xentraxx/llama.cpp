@@ -1991,6 +1991,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_KV_OFFLOAD"));
     add_opt(common_arg(
+        {"--kv-cache-host"},
+        "store KV cache on host (pinned) memory while keeping attention compute on GPU to free VRAM",
+        [](common_params & params) {
+            params.kv_on_host = true;
+        }
+    ).set_env("LLAMA_ARG_KV_CACHE_HOST"));
+    add_opt(common_arg(
         {"--repack"},
         {"-nr", "--no-repack"},
         string_format("whether to enable weight repacking (default: %s)", params.no_extra_bufts ? "disabled" : "enabled"),

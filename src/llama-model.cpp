@@ -8397,6 +8397,10 @@ ggml_tensor * llama_model::get_rope_factors(const llama_cparams & cparams, int i
 llama_memory_i * llama_model::create_memory(const llama_memory_params & params, const llama_cparams & cparams) const {
     llama_memory_i * res;
 
+    // when kv_on_host is set, KV cache is allocated on host (pinned) memory
+    // while attention compute remains on GPU (offload_kqv stays true)
+    const bool kv_offload = cparams.offload_kqv && !cparams.kv_on_host;
+
     switch (arch) {
         // Models that need specific instantiation should be handled in the
         // switch statement
@@ -8426,7 +8430,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
                             *this,
                             GGML_TYPE_F32,
                             GGML_TYPE_F32,
-                            cparams.offload_kqv,
+                            kv_offload,
+                            cparams.kv_on_host,
                             std::max((uint32_t) 1, cparams.n_seq_max),
                             cparams.n_seq_max,
                             nullptr);
@@ -8462,7 +8467,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
                             /* recurrent_type_s  */ GGML_TYPE_F32,
                             /* recurrent_rs_size */ std::max((uint32_t) 1, cparams.n_seq_max),
                             /* n_seq_max         */ cparams.n_seq_max,
-                            /* offload           */ cparams.offload_kqv,
+                            /* offload           */ kv_offload,
+                            /* use_pinned        */ cparams.kv_on_host,
                             /* unified           */ cparams.kv_unified,
                             /* filter_attn       */ std::move(filter_attn),
                             /* filter_recr       */ std::move(filter_recr));
@@ -8480,7 +8486,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
                             /* recurrent_type_v  */ GGML_TYPE_F32,
                             /* recurrent_kv_size */ std::max((uint32_t) 1, cparams.n_seq_max),
                             /* n_seq_max         */ cparams.n_seq_max,
-                            /* offload           */ cparams.offload_kqv,
+                            /* offload           */ kv_offload,
+                            /* use_pinned        */ cparams.kv_on_host,
                             /* unified           */ cparams.kv_unified,
                             /* filter_attn       */ std::move(filter_attn),
                             /* filter_recr       */ std::move(filter_recr));
@@ -8506,7 +8513,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
                                 params.type_k,
                                 params.type_v,
                                 !cparams.flash_attn,
-                                cparams.offload_kqv,
+                                kv_offload,
+                                cparams.kv_on_host,
                                 params.swa_full,
                                 cparams.kv_unified,
                                 cparams.n_ctx_seq,
@@ -8523,7 +8531,8 @@ llama_memory_i * llama_model::create_memory(const llama_memory_params & params, 
                                 params.type_k,
                                 params.type_v,
                                 !cparams.flash_attn,
-                                cparams.offload_kqv,
+                                kv_offload,
+                                cparams.kv_on_host,
                                 cparams.kv_unified,
                                 cparams.n_ctx_seq,
                                 cparams.n_seq_max,

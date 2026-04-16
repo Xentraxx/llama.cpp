@@ -82,6 +82,7 @@ llama_kv_cache::llama_kv_cache(
                 ggml_type   type_v,
                      bool   v_trans,
                      bool   offload,
+                     bool   use_pinned,
                      bool   unified,
                  uint32_t   kv_size,
                  uint32_t   n_seq_max,
@@ -194,6 +195,17 @@ llama_kv_cache::llama_kv_cache(
             buft = ggml_backend_dev_buffer_type(dev);
 
             dev_name = ggml_backend_dev_name(dev);
+        } else if (use_pinned) {
+            // when KV cache is on host with --kv-cache-host, try to use pinned host memory
+            // pinned memory enables faster DMA transfers when the compute graph runs on GPU
+            auto * dev = model.dev_layer(il);
+            if (dev) {
+                auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+                if (host_buft) {
+                    buft = host_buft;
+                    dev_name = "CPU (pinned)";
+                }
+            }
         }
 
         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);

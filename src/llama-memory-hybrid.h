@@ -35,6 +35,7 @@ public:
                             /* common */
                  uint32_t   n_seq_max,
                      bool   offload,
+                     bool   use_pinned,
                      bool   unified,
                             /* layer filters */
     const layer_filter_cb & filter_attn = nullptr,

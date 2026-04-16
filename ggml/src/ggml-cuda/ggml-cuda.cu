@@ -2996,11 +2996,32 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
     ggml_backend_buffer_t buf_src = src->view_src ? src->view_src->buffer : src->buffer;
     ggml_backend_buffer_t buf_dst = dst->view_src ? dst->view_src->buffer : dst->buffer;
 
+    // handle pinned host <-> device async copies
+    // cudaMemcpyAsync with pinned (page-locked) memory is truly asynchronous
+    const bool src_is_cuda = ggml_backend_buffer_is_cuda(buf_src);
+    const bool dst_is_cuda = ggml_backend_buffer_is_cuda(buf_dst);
+    const bool src_is_host = ggml_backend_buft_is_cuda_host(buf_src->buft);
+    const bool dst_is_host = ggml_backend_buft_is_cuda_host(buf_dst->buft);
+
+    if (src_is_host && dst_is_cuda && ggml_backend_is_cuda(backend_dst)) {
+        // host (pinned) -> device
+        ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend_dst->context;
+        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyHostToDevice, cuda_ctx->stream()));
+        return true;
+    }
+
+    if (src_is_cuda && dst_is_host && ggml_backend_is_cuda(backend_src)) {
+        // device -> host (pinned)
+        ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend_src->context;
+        CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToHost, cuda_ctx->stream()));
+        return true;
+    }
+
     if (!ggml_backend_is_cuda(backend_src) || !ggml_backend_is_cuda(backend_dst)) {
         return false;
     }
 
-    if (!ggml_backend_buffer_is_cuda(buf_src) || !ggml_backend_buffer_is_cuda(buf_dst)) {
+    if (!src_is_cuda || !dst_is_cuda) {
         return false;
     }
 

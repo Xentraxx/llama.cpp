@@ -50,7 +50,19 @@ llama_context::llama_context(
     cparams.yarn_beta_slow   = params.yarn_beta_slow   >= 0.0f ? params.yarn_beta_slow   : hparams.yarn_beta_slow;
     cparams.embeddings       = params.embeddings;
     cparams.offload_kqv      = params.offload_kqv;
+    cparams.kv_on_host       = params.kv_on_host;
     cparams.no_perf          = params.no_perf;
+
+    // kv_on_host requires GPU compute (offload_kqv) and available GPU devices
+    if (cparams.kv_on_host) {
+        if (!cparams.offload_kqv) {
+            LLAMA_LOG_WARN("%s: kv_on_host requires offload_kqv - ignoring kv_on_host\n", __func__);
+            cparams.kv_on_host = false;
+        } else if (model.devices.empty()) {
+            LLAMA_LOG_WARN("%s: kv_on_host requires a GPU device - ignoring kv_on_host\n", __func__);
+            cparams.kv_on_host = false;
+        }
+    }
     cparams.pooling_type     = params.pooling_type;
     cparams.warmup           = false;
 
@@ -204,6 +216,7 @@ llama_context::llama_context(
     LLAMA_LOG_INFO("%s: causal_attn   = %d\n",   __func__, cparams.causal_attn);
     LLAMA_LOG_INFO("%s: flash_attn    = %s\n",   __func__, llama_flash_attn_type_name(params.flash_attn_type));
     LLAMA_LOG_INFO("%s: kv_unified    = %s\n",   __func__, cparams.kv_unified ? "true" : "false");
+    LLAMA_LOG_INFO("%s: kv_on_host    = %s\n",   __func__, cparams.kv_on_host ? "true" : "false");
     LLAMA_LOG_INFO("%s: freq_base     = %.1f\n", __func__, cparams.rope_freq_base);
     LLAMA_LOG_INFO("%s: freq_scale    = %g\n",   __func__, cparams.rope_freq_scale);
 
@@ -281,6 +294,20 @@ llama_context::llama_context(
         };
 
         memory.reset(model.create_memory(params_mem, cparams));
+
+        if (cparams.kv_on_host) {
+            // estimate per-token KV transfer size for user awareness
+            const uint32_t n_layer = hparams.n_layer;
+            const uint64_t kv_bytes_per_layer =
+                (uint64_t) hparams.n_embd_k_gqa() * ggml_type_size(params.type_k) / ggml_blck_size(params.type_k) +
+                (uint64_t) hparams.n_embd_v_gqa() * ggml_type_size(params.type_v) / ggml_blck_size(params.type_v);
+            const double kv_total_mb = (double)(kv_bytes_per_layer * n_layer * cparams.n_ctx_seq) / (1024.0 * 1024.0);
+
+            LLAMA_LOG_WARN("%s: KV cache on host (pinned) memory - attention compute will transfer KV data over PCIe/bus\n", __func__);
+            LLAMA_LOG_WARN("%s: KV cache size: %.1f MiB across %u layers, %.1f KiB per token per layer\n",
+                    __func__, kv_total_mb, n_layer, (double)kv_bytes_per_layer / 1024.0);
+            LLAMA_LOG_WARN("%s: for best performance, use flash attention (-fa) and smaller KV types (e.g. q8_0, q4_0)\n", __func__);
+        }
     }
 
     // init backends
@@ -318,6 +345,7 @@ llama_context::llama_context(
             model.n_gpu_layers() > model.hparams.n_layer &&
             model.split_mode() == LLAMA_SPLIT_MODE_LAYER &&
             cparams.offload_kqv &&
+            !cparams.kv_on_host &&
             !model.has_tensor_overrides();
 
         // pipeline parallelism requires support for async compute and events in all devices
@@ -2912,6 +2940,7 @@ llama_context_params llama_context_default_params() {
         /*.abort_callback_data         =*/ nullptr,
         /*.embeddings                  =*/ false,
         /*.offload_kqv                 =*/ true,
+        /*.kv_on_host                  =*/ false,
         /*.no_perf                     =*/ true,
         /*.op_offload                  =*/ true,
         /*.swa_full                    =*/ true,

@@ -21,6 +21,7 @@ public:
                     ggml_type   type_r,
                     ggml_type   type_s,
                          bool   offload,
+                         bool   use_pinned,
                      uint32_t   mem_size,
                      uint32_t   n_seq_max,
         const layer_filter_cb & filter);
